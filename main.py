@@ -9,7 +9,8 @@ import os
 import random
 from datetime import datetime
 from config import EMAIL, PASSWORD
-from laporan_template import URAIAN_AKTIVITAS, PEMBELAJARAN, KENDALA
+from google_sheets import get_laporan
+from email_notifier import send_attendance_notification
 
 # Path ke Edge Driver
 EDGE_DRIVER_PATH = "/Users/capyzara/Downloads/edgedriver_mac64/msedgedriver"
@@ -100,8 +101,22 @@ class MagangHubAttendance:
     
     def do_attendance(self):
         """Melakukan absen dengan klik tanggal hari ini di kalender dan isi form"""
+        data_source = "Unknown"
+        URAIAN_AKTIVITAS = ""
+        PEMBELAJARAN = ""
+        KENDALA = ""
+        
         try:
             print("Membuka dashboard MagangHub...")
+            
+            # Ambil data laporan (dari Google Sheets atau local template)
+            URAIAN_AKTIVITAS, PEMBELAJARAN, KENDALA = get_laporan()
+            
+            # Tentukan data source untuk logging
+            # Cek apakah data dari Google Sheets atau template
+            from google_sheets import get_laporan_from_sheet
+            test_uraian, _, _ = get_laporan_from_sheet()
+            data_source = "Google Sheets" if test_uraian == URAIAN_AKTIVITAS else "Local Template"
             
             # Navigasi ke dashboard setelah login
             self.driver.get("https://monev.maganghub.kemnaker.go.id/dashboard")
@@ -166,21 +181,80 @@ class MagangHubAttendance:
                 print("✓ Checkbox konfirmasi dicentang")
             human_delay(1, 2)
             
-            # SUBMIT DISABLED - Hanya sampai checkbox untuk testing
-            print("\n✓ Form sudah terisi lengkap sampai checkbox!")
-            print("⚠ Submit di-disable untuk testing - silakan cek form di browser")
-            print("Tekan Ctrl+C untuk menutup browser atau tunggu 60 detik...")
+            # Validasi panjang karakter sebelum submit
+            print("\nMemvalidasi panjang konten...")
+            MIN_CHARACTERS = 100
+            validation_passed = True
             
+            if len(URAIAN_AKTIVITAS) < MIN_CHARACTERS:
+                print(f"✗ Uraian Aktivitas terlalu pendek: {len(URAIAN_AKTIVITAS)} karakter (minimal {MIN_CHARACTERS})")
+                validation_passed = False
+            else:
+                print(f"✓ Uraian Aktivitas: {len(URAIAN_AKTIVITAS)} karakter")
+            
+            if len(PEMBELAJARAN) < MIN_CHARACTERS:
+                print(f"✗ Pembelajaran terlalu pendek: {len(PEMBELAJARAN)} karakter (minimal {MIN_CHARACTERS})")
+                validation_passed = False
+            else:
+                print(f"✓ Pembelajaran: {len(PEMBELAJARAN)} karakter")
+            
+            if len(KENDALA) < MIN_CHARACTERS:
+                print(f"✗ Kendala terlalu pendek: {len(KENDALA)} karakter (minimal {MIN_CHARACTERS})")
+                validation_passed = False
+            else:
+                print(f"✓ Kendala: {len(KENDALA)} karakter")
+            
+            if not validation_passed:
+                print("\n⚠ SUBMIT DIBATALKAN - Ada konten yang kurang dari 100 karakter")
+                print("Silakan perbaiki data di Google Sheets atau laporan_template.py")
+                print("Tekan Ctrl+C untuk menutup atau tunggu 30 detik...")
+                time.sleep(30)
+                return {
+                    'success': False,
+                    'error': 'Validasi gagal: Ada konten kurang dari 100 karakter',
+                    'uraian': URAIAN_AKTIVITAS,
+                    'pembelajaran': PEMBELAJARAN,
+                    'kendala': KENDALA,
+                    'data_source': data_source
+                }
+            
+            # Klik tombol Submit
+            print("\n✓ Validasi berhasil! Melanjutkan submit...")
+            print("Mencari tombol submit...")
+            submit_button = WebDriverWait(self.driver, 10).until(
+                EC.element_to_be_clickable((By.CSS_SELECTOR, "button.v-btn.v-btn--elevated[type='submit']"))
+            )
+            human_delay(1, 2)
+            print("Mengklik tombol submit...")
+            submit_button.click()
+            
+            # Tunggu konfirmasi submit
+            human_delay(3, 5)
+            
+            print("\n✓ Form laporan berhasil disubmit!")
             current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            print(f"\nProses selesai pada {current_time}")
+            print(f"Absen selesai pada {current_time}")
             
-            # Beri waktu untuk cek manual
-            time.sleep(60)
-            return True
+            # Tunggu sebentar untuk memastikan submit berhasil
+            time.sleep(3)
+            return {
+                'success': True,
+                'uraian': URAIAN_AKTIVITAS,
+                'pembelajaran': PEMBELAJARAN,
+                'kendala': KENDALA,
+                'data_source': data_source
+            }
             
         except Exception as e:
             print(f"Error saat absen: {str(e)}")
-            return False
+            return {
+                'success': False,
+                'error': str(e),
+                'uraian': URAIAN_AKTIVITAS,
+                'pembelajaran': PEMBELAJARAN,
+                'kendala': KENDALA,
+                'data_source': data_source
+            }
     
     def take_screenshot(self, filename="screenshot.png"):
         """Ambil screenshot sebagai bukti"""
@@ -205,6 +279,8 @@ def main():
     
     # Buat instance
     attendance = MagangHubAttendance(EMAIL, PASSWORD)
+    screenshot_path = None
+    result = None
     
     try:
         # Setup browser
@@ -213,18 +289,76 @@ def main():
         # Login
         if attendance.login():
             # Lakukan absen
-            if attendance.do_attendance():
+            result = attendance.do_attendance()
+            
+            if result and result.get('success'):
                 # Ambil screenshot sebagai bukti
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                attendance.take_screenshot(f"attendance_{timestamp}.png")
+                screenshot_path = f"attendance_{timestamp}.png"
+                attendance.take_screenshot(screenshot_path)
                 print("\n✓ Absen berhasil dilakukan!")
+                
+                # Kirim notifikasi sukses
+                print("\nMengirim notifikasi email...")
+                email_details = {
+                    'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                    'date': datetime.now().strftime('%d %B %Y'),
+                    'status_text': 'Absen berhasil disubmit',
+                    'data_source': result.get('data_source', 'Unknown'),
+                    'uraian': result.get('uraian', ''),
+                    'pembelajaran': result.get('pembelajaran', ''),
+                    'kendala': result.get('kendala', '')
+                }
+                send_attendance_notification('SUCCESS', email_details, screenshot_path)
             else:
                 print("\n✗ Gagal melakukan absen")
+                
+                # Kirim notifikasi gagal
+                print("\nMengirim notifikasi email...")
+                email_details = {
+                    'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                    'date': datetime.now().strftime('%d %B %Y'),
+                    'status_text': 'Absen gagal',
+                    'data_source': result.get('data_source', 'Unknown') if result else 'Unknown',
+                    'uraian': result.get('uraian', '') if result else '',
+                    'pembelajaran': result.get('pembelajaran', '') if result else '',
+                    'kendala': result.get('kendala', '') if result else '',
+                    'error': result.get('error', 'Unknown error') if result else 'Unknown error'
+                }
+                send_attendance_notification('FAILED', email_details)
         else:
             print("\n✗ Gagal login")
             
+            # Kirim notifikasi login gagal
+            print("\nMengirim notifikasi email...")
+            email_details = {
+                'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                'date': datetime.now().strftime('%d %B %Y'),
+                'status_text': 'Login gagal',
+                'data_source': 'N/A',
+                'uraian': '',
+                'pembelajaran': '',
+                'kendala': '',
+                'error': 'Gagal login ke sistem MagangHub'
+            }
+            send_attendance_notification('FAILED', email_details)
+            
     except Exception as e:
         print(f"\nError: {str(e)}")
+        
+        # Kirim notifikasi error
+        print("\nMengirim notifikasi email...")
+        email_details = {
+            'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            'date': datetime.now().strftime('%d %B %Y'),
+            'status_text': 'Error sistem',
+            'data_source': 'N/A',
+            'uraian': '',
+            'pembelajaran': '',
+            'kendala': '',
+            'error': str(e)
+        }
+        send_attendance_notification('FAILED', email_details)
         
     finally:
         # Tutup browser

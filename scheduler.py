@@ -30,7 +30,7 @@ def main():
     print("=" * 60 + "\n")
     
     # Schedule untuk jam 16:00 setiap hari kerja
-    schedule.every().monday.at("15:00").do(run_attendance)
+    schedule.every().monday.at("16:00").do(run_attendance)
     schedule.every().tuesday.at("16:00").do(run_attendance)
     schedule.every().wednesday.at("16:00").do(run_attendance)
     schedule.every().thursday.at("16:00").do(run_attendance)
