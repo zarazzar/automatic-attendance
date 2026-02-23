@@ -65,6 +65,11 @@ Secrets adalah cara aman untuk menyimpan data sensitif seperti password.
 - **Pembelajaran** (minimal 100 karakter)  
 - **Kendala** (minimal 100 karakter)
 
+**Catatan:** 
+- Secret `GOOGLE_SHEET_CSV_URL` bersifat **OPTIONAL**
+- Jika tidak diset, akan menggunakan URL default yang ada di `google_sheets.py`
+- Jika URL invalid atau Google Sheets tidak digunakan, script akan fallback ke template lokal
+
 📖 Detail lengkap: Lihat [GOOGLE_SHEETS_SETUP.md](GOOGLE_SHEETS_SETUP.md)
 
 ### 3. Verifikasi Workflow File
@@ -159,6 +164,22 @@ Sebelum menunggu jadwal otomatis, test dulu secara manual:
 **Error lainnya:**
 - Jika masih error, cek logs untuk detail errornya
 - Biasanya karena compatibility issue antara Chrome dan driver
+
+### Error: SyntaxError: invalid decimal literal
+
+**Error pada "Create google_sheets.py with CSV URL" atau "Run attendance script"**
+
+**Penyebab:**
+- Sed command error karena special characters di URL
+- File google_sheets.py corrupted
+
+**Solusi:**
+- ✅ **Sudah diperbaiki!** Sekarang menggunakan environment variable yang lebih reliable
+- Google Sheets URL di-inject via environment variable, bukan di-edit dengan sed
+- Jika masih error:
+  1. Pastikan secret `GOOGLE_SHEET_CSV_URL` terisi dengan benar (atau kosongkan jika tidak pakai)
+  2. Re-run workflow
+  3. Check bahwa workflow file sudah yang terbaru (ada `GOOGLE_SHEET_CSV_URL: ${{ secrets.GOOGLE_SHEET_CSV_URL }}` di env)
 
 ### Login Gagal
 
