@@ -25,16 +25,16 @@ def main():
     print("=" * 60)
     print("SCHEDULER OTOMASI ABSEN MAGANGHUB")
     print("=" * 60)
-    print("Schedule: Setiap hari Senin-Jumat jam 16:00 WIB")
+    print("Schedule: Setiap hari Senin-Jumat jam 22:00 WIB")
     print("Tekan Ctrl+C untuk menghentikan scheduler")
     print("=" * 60 + "\n")
     
-    # Schedule untuk jam 16:00 setiap hari kerja
-    schedule.every().monday.at("16:00").do(run_attendance)
-    schedule.every().tuesday.at("16:00").do(run_attendance)
-    schedule.every().wednesday.at("16:00").do(run_attendance)
-    schedule.every().thursday.at("16:00").do(run_attendance)
-    schedule.every().friday.at("16:00").do(run_attendance)
+    # Schedule untuk jam 22:00 setiap hari kerja
+    schedule.every().monday.at("22:00").do(run_attendance)
+    schedule.every().tuesday.at("22:00").do(run_attendance)
+    schedule.every().wednesday.at("22:00").do(run_attendance)
+    schedule.every().thursday.at("22:00").do(run_attendance)
+    schedule.every().friday.at("22:00").do(run_attendance)
     
     print(f"Scheduler aktif! Menunggu jadwal berikutnya...")
     print(f"Waktu sekarang: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
