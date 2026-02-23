@@ -2,7 +2,20 @@
 
 Script Python untuk otomasi absensi di platform MagangHub menggunakan Selenium.
 
-## Instalasi
+## 🚀 Cara Termudah: GitHub Actions (GRATIS!)
+
+**Jalankan otomatis di cloud tanpa perlu server!**
+
+✅ Gratis unlimited (untuk public repo) atau 2,000 menit/bulan (private repo)  
+✅ Tidak perlu komputer menyala 24/7  
+✅ Setup sekali, jalan otomatis selamanya  
+✅ Logging dan monitoring built-in  
+
+**📖 [Lihat Panduan Setup GitHub Actions](GITHUB_ACTIONS_SETUP.md)**
+
+---
+
+## Instalasi Lokal
 
 1. Install dependencies:
 ```bash
@@ -158,6 +171,35 @@ launchctl unload ~/Library/LaunchAgents/com.maganghub.attendance.plist
 - **Login failed**: Verifikasi credential dan URL login
 - **Headless mode**: Uncomment baris `chrome_options.add_argument('--headless')` untuk menjalankan tanpa UI
 
+## Opsi Deployment & Hosting
+
+### 1. GitHub Actions ⭐ (Recommended - GRATIS)
+**Lihat [GITHUB_ACTIONS_SETUP.md](GITHUB_ACTIONS_SETUP.md)** untuk panduan lengkap.
+- ✅ Gratis unlimited untuk public repo
+- ✅ Setup mudah, maintenance minimal
+- ✅ Tidak perlu server
+
+### 2. Cloud VPS
+Untuk kontrol penuh dan scheduled tasks:
+- **DigitalOcean** ($5/bulan)
+- **AWS EC2** (free tier 1 tahun)
+- **Google Cloud Compute Engine** (free tier)
+- **Oracle Cloud** (always free tier dengan specs bagus)
+- **Linode** ($5/bulan)
+
+### 3. Container Hosting
+Deploy sebagai Docker container:
+- **Railway** ($5 credit/bulan - cukup untuk light usage)
+- **Render** (750 jam/bulan free tier)
+- **Fly.io** (free tier terbatas)
+
+### 4. Platform-as-a-Service
+- **PythonAnywhere** (free tier terbatas, butuh konfigurasi khusus untuk Selenium)
+- **Heroku** (tidak ada free tier lagi sejak 2022)
+
+**💡 Rekomendasi:** Mulai dengan **GitHub Actions** (gratis & mudah), upgrade ke VPS jika butuh kontrol lebih.
+
 ## Disclaimer
 
 Script ini untuk keperluan pembelajaran. Pastikan penggunaan otomasi ini sesuai dengan kebijakan MagangHub.
+

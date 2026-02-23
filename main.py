@@ -2,8 +2,10 @@ from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.edge.service import Service
-from selenium.webdriver.edge.options import Options
+from selenium.webdriver.edge.service import Service as EdgeService
+from selenium.webdriver.edge.options import Options as EdgeOptions
+from selenium.webdriver.chrome.service import Service as ChromeService
+from selenium.webdriver.chrome.options import Options as ChromeOptions
 import time
 import os
 import random
@@ -12,8 +14,11 @@ from config import EMAIL, PASSWORD
 from google_sheets import get_laporan
 from email_notifier import send_attendance_notification
 
-# Path ke Edge Driver
+# Path ke Edge Driver (untuk lokal)
 EDGE_DRIVER_PATH = "/Users/capyzara/Downloads/edgedriver_mac64/msedgedriver"
+
+# Detect environment (GitHub Actions atau lokal)
+IS_CI = os.getenv('CI') == 'true' or os.getenv('GITHUB_ACTIONS') == 'true'
 
 def human_delay(min_seconds=1, max_seconds=3):
     """Delay random untuk menghindari deteksi bot"""
@@ -27,23 +32,42 @@ class MagangHubAttendance:
         self.driver = None
         
     def setup_driver(self):
-        """Setup Edge driver dengan opsi dan session persistence"""
-        edge_options = Options()
+        """Setup browser driver (Chrome untuk CI, Edge untuk lokal)"""
         
-        # Gunakan user profile untuk menyimpan session
-        user_data_dir = os.path.expanduser('~/Library/Application Support/EdgeAutomation')
-        edge_options.add_argument(f'--user-data-dir={user_data_dir}')
-        edge_options.add_argument('--profile-directory=Default')
+        if IS_CI:
+            # Gunakan Chrome headless untuk GitHub Actions
+            print("Running in CI environment, using Chrome headless...")
+            chrome_options = ChromeOptions()
+            chrome_options.add_argument('--headless=new')
+            chrome_options.add_argument('--no-sandbox')
+            chrome_options.add_argument('--disable-dev-shm-usage')
+            chrome_options.add_argument('--disable-gpu')
+            chrome_options.add_argument('--window-size=1920,1080')
+            chrome_options.add_argument('--disable-blink-features=AutomationControlled')
+            chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
+            chrome_options.add_experimental_option('useAutomationExtension', False)
+            
+            self.driver = webdriver.Chrome(options=chrome_options)
+        else:
+            # Gunakan Edge untuk development lokal
+            print("Running locally, using Edge...")
+            edge_options = EdgeOptions()
+            
+            # Gunakan user profile untuk menyimpan session
+            user_data_dir = os.path.expanduser('~/Library/Application Support/EdgeAutomation')
+            edge_options.add_argument(f'--user-data-dir={user_data_dir}')
+            edge_options.add_argument('--profile-directory=Default')
+            
+            # Uncomment baris di bawah jika ingin menjalankan headless di lokal juga
+            # edge_options.add_argument('--headless=new')
+            edge_options.add_argument('--no-sandbox')
+            edge_options.add_argument('--disable-dev-shm-usage')
+            edge_options.add_argument('--start-maximized')
+            
+            # Setup Edge service dengan path driver
+            service = EdgeService(EDGE_DRIVER_PATH)
+            self.driver = webdriver.Edge(service=service, options=edge_options)
         
-        # Uncomment baris di bawah jika ingin menjalankan headless (tanpa UI browser)
-        # edge_options.add_argument('--headless')
-        edge_options.add_argument('--no-sandbox')
-        edge_options.add_argument('--disable-dev-shm-usage')
-        edge_options.add_argument('--start-maximized')
-        
-        # Setup Edge service dengan path driver
-        service = Service(EDGE_DRIVER_PATH)
-        self.driver = webdriver.Edge(service=service, options=edge_options)
         self.driver.implicitly_wait(10)
         
     def login(self):
