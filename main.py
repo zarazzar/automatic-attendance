@@ -244,13 +244,80 @@ class MagangHubAttendance:
             
             # Klik tombol Submit
             print("\n✓ Validasi berhasil! Melanjutkan submit...")
+            
+            # Ambil screenshot sebelum submit untuk debugging
+            try:
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                debug_screenshot = f"before_submit_{timestamp}.png"
+                self.driver.save_screenshot(debug_screenshot)
+                print(f"📸 Debug screenshot: {debug_screenshot}")
+            except:
+                pass
+            
             print("Mencari tombol submit...")
-            submit_button = WebDriverWait(self.driver, 10).until(
-                EC.element_to_be_clickable((By.CSS_SELECTOR, "button.v-btn.v-btn--elevated[type='submit']"))
-            )
+            submit_button = None
+            
+            # Coba berbagai selector untuk tombol submit
+            submit_selectors = [
+                "button.v-btn.v-btn--elevated[type='submit']",
+                "button[type='submit']",
+                "button.v-btn[type='submit']",
+                "//button[contains(text(), 'Submit')]",
+                "//button[contains(text(), 'Kirim')]",
+                "//button[contains(text(), 'Simpan')]",
+                "button.v-btn.v-btn--elevated",
+                "button.btn-primary[type='submit']"
+            ]
+            
+            for selector in submit_selectors:
+                try:
+                    if selector.startswith("//"):
+                        # XPath selector
+                        submit_button = WebDriverWait(self.driver, 5).until(
+                            EC.element_to_be_clickable((By.XPATH, selector))
+                        )
+                    else:
+                        # CSS selector
+                        submit_button = WebDriverWait(self.driver, 5).until(
+                            EC.element_to_be_clickable((By.CSS_SELECTOR, selector))
+                        )
+                    
+                    if submit_button:
+                        print(f"✓ Tombol submit ditemukan dengan selector: {selector}")
+                        break
+                except:
+                    continue
+            
+            if not submit_button:
+                # Coba cari semua button dan pilih yang paling relevan
+                try:
+                    all_buttons = self.driver.find_elements(By.TAG_NAME, "button")
+                    print(f"Total buttons ditemukan: {len(all_buttons)}")
+                    
+                    for idx, btn in enumerate(all_buttons):
+                        btn_text = btn.text.strip().lower()
+                        btn_type = btn.get_attribute("type")
+                        print(f"  Button {idx+1}: text='{btn_text}', type='{btn_type}'")
+                        
+                        if btn_type == "submit" or any(keyword in btn_text for keyword in ["submit", "kirim", "simpan"]):
+                            submit_button = btn
+                            print(f"✓ Tombol submit dipilih: Button {idx+1}")
+                            break
+                except Exception as e:
+                    print(f"⚠ Error mencari manual: {e}")
+            
+            if not submit_button:
+                raise Exception("Tombol submit tidak ditemukan dengan semua selector yang tersedia")
+            
             human_delay(1, 2)
             print("Mengklik tombol submit...")
-            submit_button.click()
+            
+            # Coba click dengan JavaScript jika regular click gagal
+            try:
+                submit_button.click()
+            except Exception as e:
+                print(f"⚠ Regular click gagal, mencoba JavaScript click...")
+                self.driver.execute_script("arguments[0].click();", submit_button)
             
             # Tunggu konfirmasi submit
             human_delay(3, 5)
