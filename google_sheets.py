@@ -2,10 +2,19 @@ import requests
 import csv
 from datetime import datetime
 from io import StringIO
+import os
 
 # URL Google Sheet yang sudah di-publish as CSV
-# Ganti dengan URL sheet Anda
-GOOGLE_SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vR_WWdO2CZMU5CJxZTPoznjsUqGV91p5JWzRcqzzmOjZMVS8q2yhx4SFXMQlQZmamZ7AV8jZohJas7j/pub?gid=0&single=true&output=csv"
+# Bisa di-override dengan environment variable GOOGLE_SHEET_CSV_URL
+# atau set di config.py
+try:
+    from config import GOOGLE_SHEET_CSV_URL as CONFIG_URL
+except ImportError:
+    CONFIG_URL = None
+
+GOOGLE_SHEET_CSV_URL = os.getenv('GOOGLE_SHEET_CSV_URL', 
+                                  CONFIG_URL or 
+                                  "https://docs.google.com/spreadsheets/d/e/2PACX-1vR_WWdO2CZMU5CJxZTPoznjsUqGV91p5JWzRcqzzmOjZMVS8q2yhx4SFXMQlQZmamZ7AV8jZohJas7j/pub?gid=0&single=true&output=csv")
 
 def parse_date(date_str):
     """

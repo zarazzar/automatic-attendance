@@ -30,10 +30,11 @@ RECIPIENT_EMAIL = "receiver@example.com"
 # Google Sheets Settings (Optional)
 # ============================================================
 
-# Google Sheets ID untuk menyimpan laporan
-# Ambil dari URL: https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/edit
-SPREADSHEET_ID = "your_spreadsheet_id"
-
-# Path ke file credentials.json dari Google Cloud
-# Lihat GOOGLE_SHEETS_SETUP.md untuk cara setup
-GOOGLE_CREDENTIALS_PATH = "credentials/credentials.json"
+# Google Sheets CSV URL untuk menyimpan laporan
+# Cara mendapatkan URL:
+# 1. Buka Google Sheet yang berisi laporan
+# 2. File → Share → Publish to web
+# 3. Pilih "Comma-separated values (.csv)"
+# 4. Copy URL yang muncul dan paste di bawah
+# Lihat GOOGLE_SHEETS_SETUP.md untuk panduan lengkap
+GOOGLE_SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/YOUR_SHEET_ID/pub?output=csv"

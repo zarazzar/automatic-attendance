@@ -46,19 +46,16 @@ jobs:
         NOTIFICATION_EMAIL = "${{ secrets.SENDER_EMAIL }}"
         NOTIFICATION_PASSWORD = "${{ secrets.SENDER_PASSWORD }}"
         RECIPIENT_EMAIL = "${{ secrets.RECEIVER_EMAIL }}"
+        
+        # Google Sheets CSV URL (optional)
+        GOOGLE_SHEET_CSV_URL = "${{ secrets.GOOGLE_SHEET_CSV_URL }}"
         EOF
-    
-    - name: Create google_sheets.py with CSV URL
-      run: |
-        # Update Google Sheets CSV URL jika disediakan
-        if [ -n "${{ secrets.GOOGLE_SHEET_CSV_URL }}" ]; then
-          sed -i 's|GOOGLE_SHEET_CSV_URL = .*|GOOGLE_SHEET_CSV_URL = "${{ secrets.GOOGLE_SHEET_CSV_URL }}"|' google_sheets.py
-        fi
     
     - name: Run attendance script
       run: python main.py
       env:
         TZ: Asia/Jakarta
+        GOOGLE_SHEET_CSV_URL: ${{ secrets.GOOGLE_SHEET_CSV_URL }}
     
     - name: Upload logs
       if: always()
