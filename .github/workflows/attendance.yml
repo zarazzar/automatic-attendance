@@ -21,21 +21,15 @@ jobs:
       with:
         python-version: '3.11'
     
-    - name: Install Chrome
-      run: |
-        wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | sudo apt-key add -
-        sudo sh -c 'echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google-chrome.list'
-        sudo apt-get update
-        sudo apt-get install -y google-chrome-stable
+    - name: Set up Chrome and ChromeDriver
+      uses: browser-actions/setup-chrome@v1
+      with:
+        chrome-version: stable
     
-    - name: Install ChromeDriver
+    - name: Verify Chrome installation
       run: |
-        CHROME_VERSION=$(google-chrome --version | awk '{print $3}' | cut -d'.' -f1)
-        CHROMEDRIVER_VERSION=$(curl -s "https://chromedriver.storage.googleapis.com/LATEST_RELEASE_${CHROME_VERSION}")
-        wget -q "https://chromedriver.storage.googleapis.com/${CHROMEDRIVER_VERSION}/chromedriver_linux64.zip"
-        unzip chromedriver_linux64.zip
-        sudo mv chromedriver /usr/local/bin/
-        sudo chmod +x /usr/local/bin/chromedriver
+        which google-chrome-stable || which google-chrome || which chromium-browser
+        google-chrome --version || google-chrome-stable --version || chromium-browser --version
     
     - name: Install Python dependencies
       run: |
@@ -47,18 +41,19 @@ jobs:
         cat > config.py << EOF
         EMAIL = "${{ secrets.MAGANGHUB_EMAIL }}"
         PASSWORD = "${{ secrets.MAGANGHUB_PASSWORD }}"
-        SMTP_SERVER = "${{ secrets.SMTP_SERVER }}"
-        SMTP_PORT = ${{ secrets.SMTP_PORT }}
-        SENDER_EMAIL = "${{ secrets.SENDER_EMAIL }}"
-        SENDER_PASSWORD = "${{ secrets.SENDER_PASSWORD }}"
-        RECEIVER_EMAIL = "${{ secrets.RECEIVER_EMAIL }}"
-        SPREADSHEET_ID = "${{ secrets.SPREADSHEET_ID }}"
+        
+        ENABLE_EMAIL_NOTIFICATION = True
+        NOTIFICATION_EMAIL = "${{ secrets.SENDER_EMAIL }}"
+        NOTIFICATION_PASSWORD = "${{ secrets.SENDER_PASSWORD }}"
+        RECIPIENT_EMAIL = "${{ secrets.RECEIVER_EMAIL }}"
         EOF
     
-    - name: Create Google Sheets credentials
+    - name: Create google_sheets.py with CSV URL
       run: |
-        mkdir -p credentials
-        echo '${{ secrets.GOOGLE_SHEETS_CREDENTIALS }}' > credentials/credentials.json
+        # Update Google Sheets CSV URL jika disediakan
+        if [ -n "${{ secrets.GOOGLE_SHEET_CSV_URL }}" ]; then
+          sed -i 's|GOOGLE_SHEET_CSV_URL = .*|GOOGLE_SHEET_CSV_URL = "${{ secrets.GOOGLE_SHEET_CSV_URL }}"|' google_sheets.py
+        fi
     
     - name: Run attendance script
       run: python main.py

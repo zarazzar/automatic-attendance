@@ -42,23 +42,30 @@ Secrets adalah cara aman untuk menyimpan data sensitif seperti password.
 |-------------|-------------|--------------|
 | `MAGANGHUB_EMAIL` | Email login MagangHub | `your.email@example.com` |
 | `MAGANGHUB_PASSWORD` | Password MagangHub | `yourpassword123` |
-| `SMTP_SERVER` | SMTP server untuk email | `smtp.gmail.com` |
-| `SMTP_PORT` | SMTP port | `587` |
 | `SENDER_EMAIL` | Email pengirim notifikasi | `your.email@gmail.com` |
 | `SENDER_PASSWORD` | Password email atau App Password | `your_app_password` |
 | `RECEIVER_EMAIL` | Email penerima notifikasi | `notification@example.com` |
-| `SPREADSHEET_ID` | Google Sheets ID | `1abc...xyz` |
-| `GOOGLE_SHEETS_CREDENTIALS` | JSON credentials dari Google Cloud | `{"type": "service_account",...}` |
+| `GOOGLE_SHEET_CSV_URL` | *(Optional)* URL CSV dari Google Sheets | `https://docs.google.com/.../pub?output=csv` |
 
-#### Tips Setup Google Sheets Credentials:
+#### Cara Mendapatkan Google Sheets CSV URL:
 
-```bash
-# Copy isi file credentials.json sebagai text
-cat credentials/credentials.json | pbcopy
+**Project ini pakai cara SEDERHANA tanpa perlu credentials ribet!**
 
-# Paste ke GitHub Secret GOOGLE_SHEETS_CREDENTIALS
-# Pastikan seluruh JSON text ter-copy dengan benar
-```
+1. Buka Google Sheet yang sudah kamu isi dengan data laporan
+2. Klik **File** → **Share** → **Publish to web**
+3. Tab **Link**:
+   - Dropdown 1: Pilih sheet yang mau dipublish
+   - Dropdown 2: Pilih **Comma-separated values (.csv)**
+4. Klik **Publish** → Copy URL yang muncul
+5. Paste URL tersebut ke GitHub Secret `GOOGLE_SHEET_CSV_URL`
+
+**Format Sheet** harus punya kolom:
+- **Tanggal** (format: YYYY-MM-DD atau DD-MMM-YYYY)
+- **Uraian Aktivitas** (minimal 100 karakter)
+- **Pembelajaran** (minimal 100 karakter)  
+- **Kendala** (minimal 100 karakter)
+
+📖 Detail lengkap: Lihat [GOOGLE_SHEETS_SETUP.md](GOOGLE_SHEETS_SETUP.md)
 
 ### 3. Verifikasi Workflow File
 
@@ -135,8 +142,21 @@ Sebelum menunggu jadwal otomatis, test dulu secara manual:
 
 ### Error: Chrome/ChromeDriver Issues
 
+**Error: "Process completed with exit code 8" pada Install ChromeDriver**
+
+**Penyebab:**
+- Google mengubah cara distribusi ChromeDriver (tidak lagi pakai URL lama)
+- Method install ChromeDriver sudah tidak compatible
+
 **Solusi:**
-- Workflow sudah include setup Chrome otomatis
+- ✅ **Sudah diperbaiki!** Workflow sekarang menggunakan `browser-actions/setup-chrome` action yang lebih reliable
+- Action ini otomatis install Chrome + ChromeDriver yang matching
+- Jika masih error, coba:
+  1. Re-run workflow (kadang network issue temporary)
+  2. Check logs untuk detail error spesifik
+  3. Pastikan menggunakan workflow file yang terbaru
+
+**Error lainnya:**
 - Jika masih error, cek logs untuk detail errornya
 - Biasanya karena compatibility issue antara Chrome dan driver
 
