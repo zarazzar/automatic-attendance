@@ -129,8 +129,32 @@ class MagangHubAttendance:
 
         return None
 
+    def _find_field_by_placeholder(self, keywords, timeout=8):
+        """Cari textarea berdasarkan placeholder untuk mapping field yang lebih presisi."""
+        keyword_expr = " and ".join([
+            f"contains(translate(@placeholder, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '{keyword.lower()}')"
+            for keyword in keywords
+        ])
+        xpath = f"//textarea[{keyword_expr}]"
+
+        try:
+            return WebDriverWait(self.driver, timeout).until(
+                EC.visibility_of_element_located((By.XPATH, xpath))
+            )
+        except Exception:
+            return None
+
     def _get_report_fields(self):
         """Ambil 3 field laporan (uraian, pembelajaran, kendala) dengan fallback berlapis."""
+        # Prioritas 1: placeholder spesifik agar mapping tidak tertukar.
+        uraian_field = self._find_field_by_placeholder(["uraian", "aktivitas"], timeout=6)
+        pembelajaran_field = self._find_field_by_placeholder(["pembelajaran"], timeout=6)
+        kendala_field = self._find_field_by_placeholder(["kendala"], timeout=6)
+
+        if uraian_field and pembelajaran_field and kendala_field:
+            return uraian_field, pembelajaran_field, kendala_field
+
+        # Prioritas 2: label text.
         uraian_field = self._find_field_by_label(["uraian", "aktivitas"], timeout=6)
         pembelajaran_field = self._find_field_by_label(["pembelajaran"], timeout=6)
         kendala_field = self._find_field_by_label(["kendala", "hambatan"], timeout=6)
@@ -229,6 +253,28 @@ class MagangHubAttendance:
             raise TimeoutException(
                 f"Field '{field_name}' belum terisi dengan benar (terbaca {len(current_value)} karakter)."
             )
+
+    def _validate_target_field_lengths(self):
+        """Pastikan 3 field target benar-benar terisi >= 100 karakter sebelum submit."""
+        checks = [
+            ("Uraian Aktivitas", ["uraian", "aktivitas"]),
+            ("Pembelajaran", ["pembelajaran"]),
+            ("Kendala", ["kendala"])
+        ]
+
+        short_fields = []
+        for field_name, placeholder_keywords in checks:
+            field = self._find_field_by_placeholder(placeholder_keywords, timeout=4)
+            if not field:
+                short_fields.append(f"{field_name} tidak ditemukan")
+                continue
+
+            value_len = len((field.get_attribute("value") or "").strip())
+            if value_len < 100:
+                short_fields.append(f"{field_name} hanya {value_len} karakter")
+
+        if short_fields:
+            raise Exception("Validasi field target gagal: " + " | ".join(short_fields))
 
     def _collect_form_validation_errors(self):
         """Ambil pesan error validasi yang terlihat di form."""
@@ -453,6 +499,9 @@ class MagangHubAttendance:
             
             # Klik tombol Submit
             print("\n✓ Validasi berhasil! Melanjutkan submit...")
+
+            # Gate terakhir sebelum submit: pastikan field target valid.
+            self._validate_target_field_lengths()
             
             # Ambil screenshot sebelum submit untuk debugging
             try:
