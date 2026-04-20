@@ -105,6 +105,75 @@ class MagangHubAttendance:
         self.driver.implicitly_wait(10)
         self.driver.set_page_load_timeout(60)
         self.driver.set_script_timeout(60)
+
+    def _find_field_by_label(self, keywords, timeout=8):
+        """Cari textarea berdasarkan label terdekat agar tidak bergantung pada ID dinamis."""
+        keyword_expr = " or ".join([
+            f"contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '{keyword.lower()}')"
+            for keyword in keywords
+        ])
+
+        xpaths = [
+            f"//label[{keyword_expr}]/following::textarea[1]",
+            f"//*[self::p or self::span or self::div][{keyword_expr}]/following::textarea[1]",
+            f"//textarea[contains(translate(@placeholder, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '{keywords[0].lower()}')]"
+        ]
+
+        for xpath in xpaths:
+            try:
+                return WebDriverWait(self.driver, timeout).until(
+                    EC.visibility_of_element_located((By.XPATH, xpath))
+                )
+            except Exception:
+                continue
+
+        return None
+
+    def _get_report_fields(self):
+        """Ambil 3 field laporan (uraian, pembelajaran, kendala) dengan fallback berlapis."""
+        uraian_field = self._find_field_by_label(["uraian", "aktivitas"], timeout=6)
+        pembelajaran_field = self._find_field_by_label(["pembelajaran"], timeout=6)
+        kendala_field = self._find_field_by_label(["kendala", "hambatan"], timeout=6)
+
+        if uraian_field and pembelajaran_field and kendala_field:
+            return uraian_field, pembelajaran_field, kendala_field
+
+        # Fallback: ambil 3 textarea visible teratas sesuai urutan tampilan.
+        WebDriverWait(self.driver, 20).until(
+            EC.presence_of_element_located((By.TAG_NAME, "textarea"))
+        )
+        textareas = [
+            el for el in self.driver.find_elements(By.TAG_NAME, "textarea")
+            if el.is_displayed() and el.is_enabled()
+        ]
+
+        if len(textareas) < 3:
+            raise TimeoutException(
+                f"Textarea laporan tidak ditemukan lengkap. Ditemukan {len(textareas)} textarea visible."
+            )
+
+        return textareas[0], textareas[1], textareas[2]
+
+    def _get_confirmation_checkbox(self):
+        """Cari checkbox konfirmasi dengan selector fleksibel."""
+        checkbox_selectors = [
+            (By.ID, "checkbox-v-0-17"),
+            (By.CSS_SELECTOR, "input[type='checkbox']"),
+            (By.XPATH, "//label[contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'konfirmasi')]/preceding::input[@type='checkbox'][1]"),
+            (By.XPATH, "//input[@type='checkbox' and not(@disabled)]")
+        ]
+
+        for by, selector in checkbox_selectors:
+            try:
+                checkbox = WebDriverWait(self.driver, 6).until(
+                    EC.element_to_be_clickable((by, selector))
+                )
+                if checkbox.is_displayed():
+                    return checkbox
+            except Exception:
+                continue
+
+        raise TimeoutException("Checkbox konfirmasi tidak ditemukan")
         
     def login(self):
         """Login ke MagangHub (skip jika sudah login)"""
@@ -204,14 +273,17 @@ class MagangHubAttendance:
             
             # Tunggu modal form muncul
             print("Menunggu form laporan muncul...")
-            human_delay(2, 3)
+            WebDriverWait(self.driver, 20).until(
+                EC.presence_of_element_located((By.TAG_NAME, "textarea"))
+            )
+            human_delay(1, 2)
             
             print("Mengisi form laporan harian...")
-            
+
+            # Ambil semua field laporan dengan locator yang tahan perubahan DOM.
+            uraian_field, pembelajaran_field, kendala_field = self._get_report_fields()
+
             # Isi textarea Uraian aktivitas
-            uraian_field = WebDriverWait(self.driver, 10).until(
-                EC.presence_of_element_located((By.ID, "input-v-0-9"))
-            )
             human_delay(0.5, 1.5)
             uraian_field.clear()
             human_delay(0.5, 1)
@@ -220,7 +292,6 @@ class MagangHubAttendance:
             human_delay(1.5, 3)
             
             # Isi textarea Pembelajaran yang diperoleh
-            pembelajaran_field = self.driver.find_element(By.ID, "input-v-0-12")
             pembelajaran_field.clear()
             human_delay(0.5, 1)
             pembelajaran_field.send_keys(PEMBELAJARAN)
@@ -228,7 +299,6 @@ class MagangHubAttendance:
             human_delay(1.5, 3)
             
             # Isi textarea Kendala yang dialami
-            kendala_field = self.driver.find_element(By.ID, "input-v-0-15")
             kendala_field.clear()
             human_delay(0.5, 1)
             kendala_field.send_keys(KENDALA)
@@ -236,7 +306,7 @@ class MagangHubAttendance:
             human_delay(2, 3)
             
             # Centang checkbox konfirmasi
-            checkbox = self.driver.find_element(By.ID, "checkbox-v-0-17")
+            checkbox = self._get_confirmation_checkbox()
             if not checkbox.is_selected():
                 checkbox.click()
                 print("✓ Checkbox konfirmasi dicentang")
