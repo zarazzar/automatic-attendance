@@ -6,16 +6,15 @@ from selenium.webdriver.edge.service import Service as EdgeService
 from selenium.webdriver.edge.options import Options as EdgeOptions
 from selenium.webdriver.chrome.service import Service as ChromeService
 from selenium.webdriver.chrome.options import Options as ChromeOptions
+from selenium.common.exceptions import TimeoutException, WebDriverException, SessionNotCreatedException
 import time
 import os
 import random
+import traceback
 from datetime import datetime
 from config import EMAIL, PASSWORD
 from google_sheets import get_laporan
 from email_notifier import send_attendance_notification
-
-# Path ke Edge Driver (untuk lokal)
-EDGE_DRIVER_PATH = "/Users/capyzara/Downloads/edgedriver_mac64/msedgedriver"
 
 # Detect environment (GitHub Actions atau lokal)
 IS_CI = os.getenv('CI') == 'true' or os.getenv('GITHUB_ACTIONS') == 'true'
@@ -24,6 +23,26 @@ def human_delay(min_seconds=1, max_seconds=3):
     """Delay random untuk menghindari deteksi bot"""
     delay = random.uniform(min_seconds, max_seconds)
     time.sleep(delay)
+
+
+def format_selenium_error(error, driver=None):
+    """Buat pesan error yang lebih mudah di-debug daripada stacktrace mentah Selenium."""
+    details = [f"{error.__class__.__name__}: {str(error)}"]
+
+    if driver:
+        try:
+            details.append(f"Current URL: {driver.current_url}")
+        except Exception:
+            pass
+
+        try:
+            details.append(f"Page title: {driver.title}")
+        except Exception:
+            pass
+
+    details.append("Traceback:")
+    details.append(traceback.format_exc())
+    return "\n".join(details)
 
 class MagangHubAttendance:
     def __init__(self, email, password):
@@ -43,6 +62,9 @@ class MagangHubAttendance:
             chrome_options.add_argument('--disable-dev-shm-usage')
             chrome_options.add_argument('--disable-gpu')
             chrome_options.add_argument('--window-size=1920,1080')
+            chrome_options.add_argument('--remote-debugging-port=9222')
+            chrome_options.add_argument('--disable-extensions')
+            chrome_options.add_argument('--disable-features=VizDisplayCompositor')
             chrome_options.add_argument('--disable-blink-features=AutomationControlled')
             chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
             chrome_options.add_experimental_option('useAutomationExtension', False)
@@ -63,12 +85,26 @@ class MagangHubAttendance:
             edge_options.add_argument('--no-sandbox')
             edge_options.add_argument('--disable-dev-shm-usage')
             edge_options.add_argument('--start-maximized')
-            
-            # Setup Edge service dengan path driver
-            service = EdgeService(EDGE_DRIVER_PATH)
-            self.driver = webdriver.Edge(service=service, options=edge_options)
+
+            # Jika EDGE_DRIVER_PATH diset, coba pakai dulu; jika gagal/mismatch, fallback Selenium Manager.
+            edge_driver_path = os.getenv('EDGE_DRIVER_PATH')
+            if edge_driver_path and os.path.exists(edge_driver_path):
+                print(f"Using custom EdgeDriver from EDGE_DRIVER_PATH: {edge_driver_path}")
+                try:
+                    service = EdgeService(edge_driver_path)
+                    self.driver = webdriver.Edge(service=service, options=edge_options)
+                except SessionNotCreatedException:
+                    print("Custom EdgeDriver version mismatch. Falling back to Selenium Manager...")
+                    self.driver = webdriver.Edge(options=edge_options)
+            else:
+                if edge_driver_path:
+                    print(f"EDGE_DRIVER_PATH tidak ditemukan: {edge_driver_path}")
+                print("Using Selenium Manager to auto-resolve matching EdgeDriver...")
+                self.driver = webdriver.Edge(options=edge_options)
         
         self.driver.implicitly_wait(10)
+        self.driver.set_page_load_timeout(60)
+        self.driver.set_script_timeout(60)
         
     def login(self):
         """Login ke MagangHub (skip jika sudah login)"""
@@ -119,8 +155,9 @@ class MagangHubAttendance:
             
             return True
             
-        except Exception as e:
-            print(f"Error saat login: {str(e)}")
+        except (TimeoutException, WebDriverException, Exception) as e:
+            print("Error saat login:")
+            print(format_selenium_error(e, self.driver))
             return False
     
     def do_attendance(self):
@@ -336,11 +373,19 @@ class MagangHubAttendance:
                 'data_source': data_source
             }
             
-        except Exception as e:
-            print(f"Error saat absen: {str(e)}")
+        except (TimeoutException, WebDriverException, Exception) as e:
+            print("Error saat absen:")
+            print(format_selenium_error(e, self.driver))
+            try:
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                debug_screenshot = f"error_attendance_{timestamp}.png"
+                self.driver.save_screenshot(debug_screenshot)
+                print(f"Debug screenshot disimpan: {debug_screenshot}")
+            except Exception:
+                pass
             return {
                 'success': False,
-                'error': str(e),
+                'error': format_selenium_error(e, self.driver),
                 'uraian': URAIAN_AKTIVITAS,
                 'pembelajaran': PEMBELAJARAN,
                 'kendala': KENDALA,
@@ -435,7 +480,8 @@ def main():
             send_attendance_notification('FAILED', email_details)
             
     except Exception as e:
-        print(f"\nError: {str(e)}")
+        print("\nError:")
+        print(format_selenium_error(e, attendance.driver if attendance else None))
         
         # Kirim notifikasi error
         print("\nMengirim notifikasi email...")
@@ -447,7 +493,7 @@ def main():
             'uraian': '',
             'pembelajaran': '',
             'kendala': '',
-            'error': str(e)
+            'error': format_selenium_error(e, attendance.driver if attendance else None)
         }
         send_attendance_notification('FAILED', email_details)
         
