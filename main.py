@@ -202,6 +202,85 @@ class MagangHubAttendance:
                 continue
 
         return checkbox.is_selected()
+
+    def _set_textarea_value(self, field, value, field_name):
+        """Isi textarea lalu verifikasi nilainya benar-benar masuk di DOM."""
+        field.clear()
+        human_delay(0.3, 0.8)
+        field.send_keys(value)
+
+        current_value = (field.get_attribute("value") or "").strip()
+        if len(current_value) >= len(value.strip()):
+            return
+
+        # Fallback untuk kasus input tidak benar-benar tertulis di headless/browser tertentu.
+        self.driver.execute_script(
+            """
+            arguments[0].value = arguments[1];
+            arguments[0].dispatchEvent(new Event('input', { bubbles: true }));
+            arguments[0].dispatchEvent(new Event('change', { bubbles: true }));
+            """,
+            field,
+            value
+        )
+
+        current_value = (field.get_attribute("value") or "").strip()
+        if len(current_value) < 100:
+            raise TimeoutException(
+                f"Field '{field_name}' belum terisi dengan benar (terbaca {len(current_value)} karakter)."
+            )
+
+    def _collect_form_validation_errors(self):
+        """Ambil pesan error validasi yang terlihat di form."""
+        errors = []
+
+        selectors = [
+            ".v-input--error .v-messages__message",
+            ".v-messages__message",
+            "[role='alert'] .v-messages__message"
+        ]
+
+        for selector in selectors:
+            try:
+                elements = self.driver.find_elements(By.CSS_SELECTOR, selector)
+                for element in elements:
+                    if element.is_displayed():
+                        message = (element.text or "").strip()
+                        if message and message not in errors:
+                            errors.append(message)
+            except Exception:
+                continue
+
+        return errors
+
+    def _is_submission_successful(self):
+        """Tentukan status submit berdasarkan indikator error/sukses yang terlihat."""
+        validation_errors = self._collect_form_validation_errors()
+        blocking_keywords = ["minimal", "wajib", "harus", "kosong", "invalid"]
+
+        blocking_errors = [
+            err for err in validation_errors
+            if any(keyword in err.lower() for keyword in blocking_keywords)
+        ]
+        if blocking_errors:
+            return False, f"Validasi form gagal: {' | '.join(blocking_errors)}"
+
+        try:
+            textareas = [
+                el for el in self.driver.find_elements(By.TAG_NAME, "textarea")
+                if el.is_displayed()
+            ]
+            short_fields = [
+                len((el.get_attribute("value") or "").strip())
+                for el in textareas[:3]
+                if len((el.get_attribute("value") or "").strip()) < 100
+            ]
+            if short_fields:
+                return False, "Submit gagal: ada field form yang masih kosong/kurang dari 100 karakter"
+        except Exception:
+            pass
+
+        return True, "OK"
         
     def login(self):
         """Login ke MagangHub (skip jika sudah login)"""
@@ -313,23 +392,17 @@ class MagangHubAttendance:
 
             # Isi textarea Uraian aktivitas
             human_delay(0.5, 1.5)
-            uraian_field.clear()
-            human_delay(0.5, 1)
-            uraian_field.send_keys(URAIAN_AKTIVITAS)
+            self._set_textarea_value(uraian_field, URAIAN_AKTIVITAS, "Uraian Aktivitas")
             print("✓ Uraian aktivitas terisi")
             human_delay(1.5, 3)
             
             # Isi textarea Pembelajaran yang diperoleh
-            pembelajaran_field.clear()
-            human_delay(0.5, 1)
-            pembelajaran_field.send_keys(PEMBELAJARAN)
+            self._set_textarea_value(pembelajaran_field, PEMBELAJARAN, "Pembelajaran")
             print("✓ Pembelajaran terisi")
             human_delay(1.5, 3)
             
             # Isi textarea Kendala yang dialami
-            kendala_field.clear()
-            human_delay(0.5, 1)
-            kendala_field.send_keys(KENDALA)
+            self._set_textarea_value(kendala_field, KENDALA, "Kendala")
             print("✓ Kendala terisi")
             human_delay(2, 3)
             
@@ -457,6 +530,10 @@ class MagangHubAttendance:
             
             # Tunggu konfirmasi submit
             human_delay(3, 5)
+
+            is_success, status_message = self._is_submission_successful()
+            if not is_success:
+                raise Exception(status_message)
             
             print("\n✓ Form laporan berhasil disubmit!")
             current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
