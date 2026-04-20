@@ -157,23 +157,51 @@ class MagangHubAttendance:
     def _get_confirmation_checkbox(self):
         """Cari checkbox konfirmasi dengan selector fleksibel."""
         checkbox_selectors = [
+            (By.ID, "checkbox-v-0-18"),
             (By.ID, "checkbox-v-0-17"),
+            (By.CSS_SELECTOR, "input[type='checkbox'][aria-label*='meninjau']"),
+            (By.CSS_SELECTOR, "input[type='checkbox'][aria-label*='laporan ini sudah benar']"),
             (By.CSS_SELECTOR, "input[type='checkbox']"),
             (By.XPATH, "//label[contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'konfirmasi')]/preceding::input[@type='checkbox'][1]"),
+            (By.XPATH, "//input[@type='checkbox' and contains(translate(@aria-label, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'laporan ini sudah benar')]"),
             (By.XPATH, "//input[@type='checkbox' and not(@disabled)]")
         ]
 
         for by, selector in checkbox_selectors:
             try:
-                checkbox = WebDriverWait(self.driver, 6).until(
-                    EC.element_to_be_clickable((by, selector))
+                checkbox = WebDriverWait(self.driver, 8).until(
+                    EC.presence_of_element_located((by, selector))
                 )
-                if checkbox.is_displayed():
-                    return checkbox
+                self.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", checkbox)
+                return checkbox
             except Exception:
                 continue
 
         raise TimeoutException("Checkbox konfirmasi tidak ditemukan")
+
+    def _ensure_checkbox_checked(self, checkbox):
+        """Centang checkbox dengan fallback klik JS untuk mode headless/overlay."""
+        if checkbox.is_selected():
+            return True
+
+        click_attempts = [
+            lambda: checkbox.click(),
+            lambda: self.driver.execute_script("arguments[0].click();", checkbox),
+            lambda: self.driver.execute_script(
+                "arguments[0].checked = true; arguments[0].dispatchEvent(new Event('change', {bubbles: true}));",
+                checkbox
+            )
+        ]
+
+        for action in click_attempts:
+            try:
+                action()
+                if checkbox.is_selected():
+                    return True
+            except Exception:
+                continue
+
+        return checkbox.is_selected()
         
     def login(self):
         """Login ke MagangHub (skip jika sudah login)"""
@@ -307,9 +335,10 @@ class MagangHubAttendance:
             
             # Centang checkbox konfirmasi
             checkbox = self._get_confirmation_checkbox()
-            if not checkbox.is_selected():
-                checkbox.click()
+            if self._ensure_checkbox_checked(checkbox):
                 print("✓ Checkbox konfirmasi dicentang")
+            else:
+                raise TimeoutException("Checkbox ditemukan tapi gagal dicentang")
             human_delay(1, 2)
             
             # Validasi panjang karakter sebelum submit
